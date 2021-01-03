@@ -48,7 +48,51 @@ void display() {
 	render();
 	draw_texture();
 	glutSwapBuffers();
+}
 
+void initGLUT(int* argc, char** argv) {
+	glutInit(argc, argv);
+	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE);
+	glutInitWindowSize(W, H);
+	glutCreateWindow("Volume visualiser");
+#ifndef __APPLE__
+	glewInit();
+#endif
+}
+
+void initPixelBuffer() {
+	glGenBuffers(1, &pbo);
+	glBindBuffer(GL_PIXEL_UNPACK_BUFFER, pbo);
+	glBufferData(GL_PIXEL_UNPACK_BUFFER, W * H * sizeof(GLubyte) * 4, 0, GL_STREAM_DRAW);
+	glGenTextures(1, &tex);
+	glBindTexture(GL_TEXTURE_2D, tex);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	cudaGraphicsGLRegisterBuffer(&cuda_pbo_resource, pbo, cudaGraphicsMapFlagsWriteDiscard);
+}
+
+void exitFunc() {
+	if (pbo) {
+		cudaGraphicsUnregisterResource(cuda_pbo_resource);
+		glDeleteBuffers(1, &pbo);
+		glDeleteTextures(1, &tex);
+	}
+	cudaFree(d_vol);
+}
+
+int main(int argc, char** argv) {
+	cudaMalloc(&d_vol, NX * NY * NZ * sizeof(float));
+	volumeKernelLauncher(d_vol, volumeSize, id, params);
+	printInstructions();
+	initGLUT(&argc, argv);
+	createMenu();
+	gluOrtho2D(0, W, H, 0);
+	glutKeyboardFunc(keyboard);
+	glutSpecialFunc(handleSpecialKeypress);
+	glutDisplayFunc(display);
+	initPixelBuffer();
+	glutMainLoop();
+	atexit(exitFunc);
+	return 0;
 }
 
 
